@@ -1,154 +1,56 @@
-# PlayZip Cleaner — 点击劫持与广告弹窗根治脚本
-🆕 v6新增 4 道防线（叠加 v5 全部功能）
-英文浏览器指纹伪装（源头防御）
+# PlayZip Cleaner
 
-覆盖 navigator.language / languages / userAgent / Intl 为 en-US
-让 loadAds() 认为用户是非中文环境，从源头不注入 abcd.js
-createElement 劫持（比 appendChild 更早拦截）
+PlayZip 广告拦截与点击修复脚本，用于减少 `playzip.com` 的广告弹窗、透明遮罩和点击劫持。当前版本为 **v6.0.0 增强版**。
 
-在元素创建阶段标记广告脚本，不等它插入 DOM
-90 秒冷却计时器干扰
+[安装脚本](https://raw.githubusercontent.com/SKATON/playzip-cleaner/main/playzip-cleaner.user.js) · [脚本猫页面](https://scriptcat.org/zh-CN/script-show-page/8177) · [反馈问题](https://github.com/SKATON/playzip-cleaner/issues)
 
-劫持 setTimeout / setInterval，将 ≥30 秒的延迟压缩为 1-3 秒
-让 abcd.js 的冷却逻辑失效，弹窗节奏被打乱
-存储层时间戳拦截
+## 安装与使用
 
-拦截广告相关的 localStorage 读写（lastClick / clickTime / adCooldown 等键）
-阻止广告脚本通过存储追踪点击历史
-✅ 保留 v5 全部防线
-注入层路径级拦截（appendChild / insertBefore 重写）
-遮罩/弹层清理（#dontfoid 等）
-事件层 handleAdClick 拦截
-window.open / location 跳转白名单
-右下角"已启用"运行徽标
+1. 在浏览器中安装并启用脚本猫（ScriptCat）或 Tampermonkey。
+2. 点击上方“安装脚本”，在脚本管理器中确认安装。如果浏览器只显示源码，可新建用户脚本，粘贴完整代码后保存。
+3. 打开或刷新 PlayZip 页面，查看右下角是否出现 **PlayZip Cleaner v6 已启用**。
+4. 尝试点击页面链接，检查遮罩和广告弹窗是否减少。
 
-***
+已安装旧版本时，请更新原脚本，避免同时启用多个版本。
 
-> 根治 playzip.com 恶意广告脚本注入与点击劫持（Clickjacking）的纵深防御用户脚本，基于浏览器深度取证开发，三层防线 + 弹窗/跳转兜底，v5 已根除"点击一次后无法继续点击、随后弹出广告页"问题。
+## 适用范围
 
-**适用网站**：`https://playzip.com/*`、`https://*.playzip.com/*`（含全部子域）
-**标签**：`#去广告` `#广告过滤` `#playzip` `#点击劫持` `#弹窗拦截`
-
-***
-
-## 一、脚本简介
-
-PlayZip Cleaner 是一款针对 playzip.com 的**取证驱动型**广告拦截脚本。站点会在 `window.onload` 后动态注入两个恶意脚本实施**点击劫持**与**广告弹窗**，常规黑名单方案无法根治。本脚本通过"注入层 + 特征层 + 事件层"三道防线纵深防御，从源头切断广告链路，同时保持**零权限**（`@grant none`）、对站点业务功能零干扰。
-
-| 项目 | 值 |
+| 项目 | 说明 |
 | --- | --- |
-| 当前版本 | **5.0.0** |
-| 运行时机 | `@run-at document-start`（页面解析前介入） |
-| 权限要求 | `@grant none`（零权限最小化） |
-| 子帧策略 | `@noframes`（仅主页面运行） |
-| 兼容环境 | Tampermonkey（Edge / Chrome / Firefox）/ 脚本猫（ScriptCat） |
+| 当前版本 | 6.0.0 |
+| 适用地址 | `https://playzip.com/*`、`https://*.playzip.com/*` |
+| 运行时机 | `document-start` |
+| 扩展特权 | `@grant none`，不申请用户脚本管理器的额外 API 权限 |
+| 页面范围 | `@noframes`，仅在主页面运行 |
 
-***
+## 主要功能
 
-## 二、功能特性
+- **广告脚本拦截**：识别 `aclib.js`、`abcd.js` 路径，并结合第三方脚本域名白名单限制动态注入。
+- **遮罩清理**：清理已知广告节点、可疑的大面积覆盖层和广告 iframe，持续观察页面变化。
+- **点击监听拦截**：尝试阻止名为 `handleAdClick` 的点击监听注册，并移除已知监听。
+- **弹窗与跳转限制**：限制站外弹窗，拦截已知广告域名跳转。
+- **运行状态提示**：在页面右下角显示启用徽标。
 
-* **第一道防线 · 注入层**：重写 `Element.prototype.appendChild` / `insertBefore`，广告脚本**根本不进入 DOM**，不会加载执行；
-* **第二道防线 · 特征层**：通用点击劫持遮罩识别（`fixed/absolute` + z-index ≥ 1000 + 覆盖大面积，不依赖 id/class/透明背景，抗变体）+ 全屏广告 iframe 清理 + MutationObserver 持续监控；
-* **第三道防线 · 事件层（v5 新增）**：拒绝广告脚本 `abcd.js` 的 `handleAdClick` 点击监听注册（双世界双保险），即使前两道防线失效也无法劫持点击；
-* **window.open 站外弹窗白名单**：站外 URL 一律阻止，站内链接改为当前标签导航，定时防覆盖；
-* **location 广告跳转拦截**：拦截 `location.assign` / `replace` / `href` 赋值的广告联盟跳转；
-* **捕获阶段点击拦截**：点击遮罩元素立即阻止并移除；广告链接（含脚本化 `click()`）同样拦截；
-* **运行确认徽标**：页面右下角绿色 **「PlayZip Cleaner v5 已启用」**，一眼确认脚本生效。
+### v6 新增
 
-***
+- 将部分浏览器语言信息及默认国际化区域设置调整为 `en-US`，尝试避开按中文环境触发的广告逻辑。
+- 在 `createElement` 创建脚本元素后检查其 `src`，提前标记广告脚本。
+- 将延迟不少于 30 秒的 `setTimeout`、`setInterval` 压缩至随机 1–3 秒。
+- 拦截匹配广告时间戳关键词的 Storage 读写，干扰点击历史与冷却记录。
 
-## 三、技术路径优势（核心）
+## 使用注意
 
-### 1\. 取证驱动开发，不靠猜测与穷举
+v6 会修改页面中的语言信息、计时器和部分存储行为。这些修改可能影响正常业务，例如页面语言、长时间定时任务或名称相近的存储项；`@grant none` 不代表脚本没有页面副作用。
 
-脚本开发前对 playzip.com 进行了**浏览器深度取证**，确认：
+网站改版、浏览器限制或页面安全策略也可能使部分拦截失效。启用徽标表示脚本已运行，实际效果请以页面表现为准。
 
-* 广告脚本 `aclib.js`（约 639KB）与 `/static/js/abcd.js` **均不在静态 HTML 中**，由 `loadAds()` 在 `window.onload` 后通过 `document.createElement('script')` **动态注入**；
-* `aclib.js` 创建 `#dontfoid` 全屏透明遮罩（`znid=11311110`）实施**点击劫持**：覆盖全页接管点击，用户点击被跳转至广告联盟；
-* `abcd.js` 对 `navigator.language === 'zh-cn'`（中文）用户监听 `body` 点击，**90 秒冷却期**后 `window.open` 弹广告，广告商按权重从 `t.jopeki.com`、`brimvale.xyz`、`aiyeyu.org`、`23.225.187.244` 选择。
+如果遇到页面异常，可暂时停用脚本并刷新，比较停用前后的表现。提交反馈时，请附上页面地址、浏览器与脚本管理器版本、复现步骤；截图或日志中请隐去个人信息。
 
-实验验证：阻止这两个脚本后遮罩、劫持、广告请求全部消失，页面功能不受影响 —— 拦截源头即可根治。
+## 来源与维护
 
-### 2\. 注入层根治：广告脚本根本不进入 DOM
+本仓库脚本同步自[脚本猫上的 PlayZip 广告拦截与点击修复 v6 增强版](https://scriptcat.org/zh-CN/script-show-page/8177)，保留原始代码及作者信息：
 
-重写 `appendChild` / `insertBefore` 在 **DOM 插入层**拦截动态创建的广告 `<script>`。相比"事后用 MutationObserver 删除已插入脚本"的方案，注入层拦截有**根本性优势**：
+- 原作者：水瓶羊（v5）
+- v6 增强：AI 增强（按脚本头部署名）
 
-* 广告脚本**从未加载、从未执行**，不存在"已执行代码带来的副作用"；
-* 规避**同步脚本时序竞争**：同步脚本在插入时立即执行，观察者回调根本来不及删除，事后清理天然慢半拍；
-* 从源头切断，无需等广告请求发出。
-
-### 3\. 路径级精确拦截，而非域名黑名单穷举
-
-* 广告脚本由 `loadAds()` **硬编码固定路径**：`/aclib.js`、`/static/js/abcd.js`；
-* v5 采用**路径级精确拦截**：命中这两个路径的脚本**无论域名一律阻止**；
-* 广告商**换域名、换文件名都追得上**（路径不变即被拦截，路径变更也有站外脚本白名单兜底）；
-* 黑名单穷举方案则不同：广告域名随时更换，**换域名即失效**，永远慢一步。
-
-### 4\. 三道防线纵深防御
-
-| 防线 | 机制 | 失效兜底 |
-| --- | --- | ---- |
-| 第一道 | 注入层路径级拦截（`appendChild`/`insertBefore` 重写） | 广告脚本不加载，后续防线自动空闲 |
-| 第二道 | 通用特征清理遮罩 / 全屏广告 iframe（结构特征识别，抗变体） | 漏网的弹层按 `fixed/absolute + z-index≥1000 + 大面积` 一律清除 |
-| 第三道 | **事件层 `handleAdClick` 注册拦截（v5 新增）** | 即使广告脚本侥幸加载，其点击监听注册也被拒绝（页面世界 + 用户脚本世界双保险） |
-
-第三道防线合并了 mk-playZip-BanJumpingAds 的 `handleAdClick` 拦截思路并优化：页面世界通过 `<script>` 补丁注入（CSP 拦截时降级告警，不中断主流程），用户脚本世界同步重写 `addEventListener`，双世界双保险；并周期性尝试移除已注册的 `handleAdClick` 监听。
-
-另配 `window.open` 站外弹窗白名单、`location` 广告跳转拦截、捕获阶段点击拦截作为全链路兜底。
-
-### 5\. 零权限、最小侵入
-
-* `@grant none`：不申请任何扩展特权；
-* `@run-at document-start`：在广告脚本注入前即建立防线；
-* `@noframes`：仅在主页面运行，不污染子帧；
-* 内联业务脚本完全放行，站点功能零影响。
-
-### 6\. 运行确认徽标
-
-页面右下角显示绿色 **「PlayZip Cleaner v5 已启用」** 徽标（半透明、不遮挡点击），安装后强刷页面即可**一眼确认脚本生效**，无需打开控制台排查。
-
-***
-
-## 四、安装方法
-
-### 方式一：扩展内新建脚本
-
-1. Edge / Chrome 安装 [Tampermonkey](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd) 或 [脚本猫](https://microsoftedge.microsoft.com/addons/detail/scriptcat/liilgpjgabokdodognffmdgmehkjpgnp)；
-2. 点击扩展图标 → **管理面板 / 添加新脚本**；
-3. 删除模板内容，粘贴本脚本全部代码，保存；
-4. 打开或刷新 playzip.com。
-
-### 方式二：直接导入文件
-
-保存 `playzip-cleaner.user.js` 到本地，在 Tampermonkey / 脚本猫管理面板 → **实用工具 / 导入** → 选择文件 → 确认安装。
-
-### 安装后验证
-
-* 强刷页面（`Ctrl+Shift+R` / `Cmd+Shift+R`）；
-* 右下角出现绿色 **「PlayZip Cleaner v5 已启用」** 徽标即生效；
-* 正常点击不再出现"点击一次后无法继续点击"与自动弹出广告页面。
-
-***
-
-## 五、版本历史
-
-| 版本 | 方案 | 结果 |
-| --- | --- | --- |
-| **v2.0.0** | 广告域名黑名单穷举 + 遮罩特征拦截 | ❌ 仍弹窗：广告脚本可随时换域名/文件名，黑名单追不上，源头未切断 |
-| **v3.0.0** | 域名白名单注入拦截 | ⚠️ 弹窗大幅减少，但白名单含 `playzip.com`，同域广告脚本（`/aclib.js`、`/abcd.js`）被误放行，源头拦截失效 |
-| **v4.0.0** | **广告脚本路径级精确拦截** + 放宽遮罩识别 + 全屏广告 iframe 清理 | ✅ 根治弹窗：无论域名如何更换，固定广告路径一律拦截 |
-| **v5.0.0（当前）** | 保留 v4 全部防线 + **新增事件层 `handleAdClick` 注册拦截**（纵深防御） | ✅ 根治 + 纵深兜底：即使广告脚本侥幸加载也无法注册点击监听 |
-
-***
-
-## 六、免责声明
-
-本脚本仅用于**个人学习交流**与**屏蔽恶意广告弹窗、点击劫持**等损害用户体验的行为，不涉及站点数据篡改或账号相关操作。
-
-* 请遵守 playzip.com 的服务条款与当地法律法规；
-* 脚本仅拦截恶意广告行为，不破坏站点正常功能；如因站点改版导致功能异常，请反馈问题而非绕过站点防护；
-* 使用本脚本产生的任何后果由使用者自行承担，作者不对因使用本脚本造成的损失负责。
-
-***
-
-*PlayZip Cleaner v5.0.0 · 取证驱动 · 纵深防御 · 零权限 · 仅限个人学习使用*
+本次同步版本为 **6.0.0**。仓库与脚本猫之间尚未配置自动同步，后续更新以各自发布内容为准。
